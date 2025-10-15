@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Snake — Catch the Rialo Logo</title>
+  <style>
+    body {
+      margin: 0;
+      background: radial-gradient(circle at center, #1a1f3c, #0b0d1e);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
+    h1 { font-size: 28px; margin-bottom: 10px; color: #ffcc00; text-shadow: 0 0 15px rgba(255, 204, 0, 0.7); }
+    #game-container { position: relative; display: flex; flex-direction: column; align-items: center; padding: 25px; border-radius: 20px; background: linear-gradient(145deg, #14182f, #0e1124); box-shadow: 0 0 30px rgba(0, 255, 255, 0.3), 0 0 60px rgba(0, 255, 150, 0.1); animation: glow 3s infinite alternate; transform: scale(0.9); }
+    @keyframes glow { from { box-shadow: 0 0 30px rgba(0, 255, 255, 0.3), 0 0 60px rgba(0, 255, 150, 0.1); } to { box-shadow: 0 0 40px rgba(255, 255, 0, 0.4), 0 0 80px rgba(0, 255, 100, 0.2); } }
+    canvas { border-radius: 10px; background: #111425; box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5); }
+    #controls { display: flex; justify-content: center; margin-top: 20px; gap: 15px; }
+    button { background: linear-gradient(180deg, #21c96f, #12844d); color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); transition: all 0.2s ease; text-transform: uppercase; letter-spacing: 0.5px; }
+    button:hover { transform: scale(1.05); box-shadow: 0 0 15px rgba(33, 201, 111, 0.8); }
+    #score-display { margin-top: 15px; font-size: 20px; color: #00ffcc; text-shadow: 0 0 10px rgba(0, 255, 200, 0.7); }
+    #instructions { margin-top: 20px; text-align: center; color: #ccc; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <h1>Snake — Catch the Rialo Logo</h1>
+    <canvas id="game" width="450" height="450"></canvas>
+    <div id="controls">
+      <button id="startBtn">Start</button>
+      <button id="pauseBtn">Pause</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+    <div id="score-display">Score: 0</div>
+    <div id="instructions">
+      <p>Use ← → to move.</p>
+      <p>Catch the <strong>Rialo</strong> logo to feed the snake!</p>
+      <p>Each logo caught = <strong>5 points</strong>.</p>
+    </div>
+  </div>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const scoreDisplay = document.getElementById('score-display');
+    const SIZE = 20;
+    const COLS = Math.floor(canvas.width / SIZE);
+    const ROWS = Math.floor(canvas.height / SIZE);
+    let snake, dir, nextDir, food, score, tickInterval, running;
+    let flashEffect = null;
+    const logo = new Image();
+    logo.src = 'rialo.png';
+    function reset() {
+      snake = [{ x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) }];
+      dir = { x: 1, y: 0 }; nextDir = { x: 1, y: 0 };
+      placeFood(); score = 0; updateScore(); running = false; clearInterval(tickInterval); draw();
+    }
+    function updateScore() { scoreDisplay.textContent = 'Score: ' + score; }
+    function placeFood() {
+      const taken = new Set(snake.map(s => s.x + ',' + s.y));
+      let x, y; do { x = Math.floor(Math.random() * COLS); y = Math.floor(Math.random() * ROWS); } while (taken.has(x + ',' + y));
+      food = { x, y };
+    }
+    function drawCell(x, y, color) { ctx.fillStyle = color; ctx.fillRect(x * SIZE, y * SIZE, SIZE - 1, SIZE - 1); }
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (flashEffect) {
+        const elapsed = Date.now() - flashEffect.time;
+        const alpha = 1 - elapsed / 350;
+        if (alpha > 0) {
+          ctx.globalAlpha = alpha * 0.6;
+          ctx.beginPath(); ctx.arc(flashEffect.x, flashEffect.y, SIZE * 0.9, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffee88'; ctx.fill(); ctx.globalAlpha = 1;
+        } else flashEffect = null;
+      }
+      const logoPad = -3; const logoSize = SIZE + 6;
+      if (logo.complete) ctx.drawImage(logo, food.x * SIZE + logoPad, food.y * SIZE + logoPad, logoSize, logoSize);
+      else { ctx.beginPath(); ctx.arc(food.x * SIZE + SIZE / 2, food.y * SIZE + SIZE / 2, SIZE / 2.5, 0, Math.PI * 2); ctx.fillStyle = '#ffcc00'; ctx.fill(); }
+      for (let i = 0; i < snake.length; i++) drawCell(snake[i].x, snake[i].y, i === 0 ? '#00ff88' : '#00cc66');
+    }
+    function checkEat(head) {
+      if (head.x === food.x && head.y === food.y) return true;
+      const hx = head.x * SIZE, hy = head.y * SIZE, fx = food.x * SIZE, fy = food.y * SIZE;
+      return Math.abs(hx - fx) <= SIZE * 0.9 && Math.abs(hy - fy) <= SIZE * 0.9;
+    }
+    function step() {
+      if (nextDir.x !== -dir.x || nextDir.y !== -dir.y) dir = nextDir;
+      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+      if (head.x < 0) head.x = COLS - 1; if (head.x >= COLS) head.x = 0;
+      if (head.y < 0) head.y = ROWS - 1; if (head.y >= ROWS) head.y = 0;
+      if (snake.some(seg => seg.x === head.x && seg.y === head.y)) return gameOver();
+      snake.unshift(head);
+      if (checkEat(head)) { score += 5; updateScore(); flashEffect = { x: food.x * SIZE + SIZE / 2, y: food.y * SIZE + SIZE / 2, time: Date.now() }; placeFood(); }
+      else snake.pop();
+      draw();
+    }
+    function start() { if (running) return; running = true; tickInterval = setInterval(step, 100); }
+    function pause() { running = false; clearInterval(tickInterval); }
+    function gameOver() { running = false; clearInterval(tickInterval); alert('Game over! Your score: ' + score); reset(); }
+    window.addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      if (k === 'arrowup' || k === 'w') nextDir = { x: 0, y: -1 };
+      if (k === 'arrowdown' || k === 's') nextDir = { x: 0, y: 1 };
+      if (k === 'arrowleft' || k === 'a') nextDir = { x: -1, y: 0 };
+      if (k === 'arrowright' || k === 'd') nextDir = { x: 1, y: 0 };
+      if (k === ' ') running ? pause() : start();
+    });
+    startBtn.addEventListener('click', start);
+    pauseBtn.addEventListener('click', pause);
+    resetBtn.addEventListener('click', reset);
+    reset();
+  </script>
+</body>
+</html>
